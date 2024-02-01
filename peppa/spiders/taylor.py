@@ -1,9 +1,14 @@
 import scrapy
 from scrapy import Request
-import json
-from urllib.parse import urlencode
+from scrapy import signals
+from scrapy.signalmanager import dispatcher
 
+import json
+import pandas
+from urllib.parse import urlencode
 from peppa.items import TaylorItem
+
+NUM_IMAGES = 1000
 
 HEADERS = {
     "authority": "www.pinterest.com",
@@ -36,6 +41,12 @@ class TaylorSpider(scrapy.Spider):
     allowed_domains = ["pinterest.com", "www.pinterest.ca"]
     start_urls = ["https://www.pinterest.com/resource/BaseSearchResource/get/"]
     image_urls = set()
+    count = 0
+    data = []  # stores captured images to be exported in csv format
+
+    def __init__(self, *args, **kwargs):
+        super(TaylorSpider, self).__init__(*args, **kwargs)
+        dispatcher.connect(self.spider_closed, signal=signals.spider_closed)
 
     # start req
     def start_requests(self):
@@ -50,28 +61,65 @@ class TaylorSpider(scrapy.Spider):
 
         try:
             results = data["resource_response"]["data"]["results"]
-            # invoke pipeline processing
-            item = TaylorItem()
-            item["image_urls"] = []
 
             # add all image urls
             for entry in results:
+                if not "images" in entry:
+                    continue
+
                 image = entry["images"]["orig"]
                 if image["url"] in self.image_urls:
-                    print("repeat!!!!")
-                self.image_urls.add(image["url"])
-                item["image_urls"].append(image["url"])
+                    self.logger.info("repeat!!!!")
+                    continue
 
-            # invoke pipeline processing
-            yield item
-        except KeyError as e:
+                item = TaylorItem()
+                item["image_urls"] = [image["url"]]
+                item["width"] = image["width"]
+                item["height"] = image["height"]
+                item["board"] = entry["board"]["name"]
+                item["title"] = entry["title"]
+                item["description"] = entry["description"]
+
+                self.image_urls.add(image["url"])
+
+                # invoke pipeline processing
+                yield item
+                self.count += 1
+
+        except Exception as e:
+            print(f"EXCEPTION OCCURED: {e}")
             with open("error.json", "w") as f:
                 json.dump(data, f, indent=2)
+                f.write(e)
+            return
+
+        # stop when 1000 images reached
+        if self.count > NUM_IMAGES:
+            self.logger.info("image count requirements reached. Ending crawl.")
+            return
 
         # next request
         nextBookmark = data["resource_response"]["bookmark"]
-        print(f"next bookmark: {nextBookmark}")
+        # print(f"next bookmark: {nextBookmark}")
         yield self.makeRequest(nextBookmark)
+
+    def spider_closed(self, spider):
+        """Saves stored data to csv. Runs when spider finishes"""
+        df = pandas.DataFrame(
+            self.data,
+            columns=[
+                "title",
+                "board",
+                "description",
+                "width",
+                "height",
+                "image_urls",
+                "images",
+            ],
+        )
+        df.to_csv("dataset.csv", index=False)
+
+        self.logger.info("Spider closed: %s", spider.name)
 
     def makeRequest(self, bookmark: str):
         options = {
@@ -104,6 +152,7 @@ class TaylorSpider(scrapy.Spider):
             "data": [f"{json.dumps(options)}"],
         }
 
+        # copied from chrome inspect
         req = scrapy.Request.from_curl(
             f"""curl 'https://www.pinterest.ca/resource/BaseSearchResource/get/' \
             -H 'authority: www.pinterest.ca' \

@@ -13,7 +13,10 @@ class PeppaItem(scrapy.Item):
 
 
 class TaylorItem(scrapy.Item):
-    # height = scrapy.Field()
-    # width = scrapy.Field()
     image_urls = scrapy.Field()
     images = scrapy.Field()
+    height = scrapy.Field()
+    width = scrapy.Field()
+    title = scrapy.Field()
+    board = scrapy.Field()
+    description = scrapy.Field()
