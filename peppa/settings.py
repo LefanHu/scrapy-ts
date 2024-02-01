@@ -75,6 +75,8 @@ ITEM_PIPELINES = {
 
 # image pipeline storage location
 IMAGES_STORE = "taylor_images"
+DOWNLOAD_DELAY = 1
+DOWNLOAD_TIMEOUT = 120
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html

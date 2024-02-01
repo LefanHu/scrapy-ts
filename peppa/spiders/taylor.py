@@ -53,9 +53,6 @@ class TaylorSpider(scrapy.Spider):
             # invoke pipeline processing
             item = TaylorItem()
             item["image_urls"] = []
-            # item["width"] = image["width"]
-            # item["height"] = image["height"]
-            # item["image_urls"] = image["image_url"]
 
             # add all image urls
             for entry in results:
