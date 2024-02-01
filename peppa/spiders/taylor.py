@@ -3,6 +3,8 @@ from scrapy import Request
 import json
 from urllib.parse import urlencode
 
+from peppa.items import TaylorItem
+
 HEADERS = {
     "authority": "www.pinterest.com",
     "accept": "application/json, text/javascript, */*, q=0.01",
@@ -31,8 +33,9 @@ HEADERS = {
 
 class TaylorSpider(scrapy.Spider):
     name = "taylor"
-    allowed_domains = ["pinterest.com"]
+    allowed_domains = ["pinterest.com", "www.pinterest.ca"]
     start_urls = ["https://www.pinterest.com/resource/BaseSearchResource/get/"]
+    image_urls = set()
 
     # start req
     def start_requests(self):
@@ -41,10 +44,37 @@ class TaylorSpider(scrapy.Spider):
         yield req
 
     def parse(self, response):
-        # print(f"response: {response.text}")
-        with open("data2.json", "w") as f:
-            data = json.loads(response.text)
-            json.dump(data, f, indent=2)
+        data = json.loads(response.text)
+        # with open("data2.json", "w") as f:
+        #     json.dump(data, f, indent=2)
+
+        try:
+            results = data["resource_response"]["data"]["results"]
+            # invoke pipeline processing
+            item = TaylorItem()
+            item["image_urls"] = []
+            # item["width"] = image["width"]
+            # item["height"] = image["height"]
+            # item["image_urls"] = image["image_url"]
+
+            # add all image urls
+            for entry in results:
+                image = entry["images"]["orig"]
+                if image["url"] in self.image_urls:
+                    print("repeat!!!!")
+                self.image_urls.add(image["url"])
+                item["image_urls"].append(image["url"])
+
+            # invoke pipeline processing
+            yield item
+        except KeyError as e:
+            with open("error.json", "w") as f:
+                json.dump(data, f, indent=2)
+
+        # next request
+        nextBookmark = data["resource_response"]["bookmark"]
+        print(f"next bookmark: {nextBookmark}")
+        yield self.makeRequest(nextBookmark)
 
     def makeRequest(self, bookmark: str):
         options = {
@@ -67,9 +97,7 @@ class TaylorSpider(scrapy.Spider):
                 "scope": "pins",
                 "source_id": None,
                 "top_pin_id": None,
-                "bookmarks": [
-                    "Y2JVSG81V2sxcmNHRlpWM1J5VFVaU1ZWRllhR3RXTVVZMldWVlZNVlV4U25Sak0yaFhVbTFvTTFaWGN6RldhekZXVm14b1YxSllRbEJYVm1ONFZEQTFWMVZzYkdwU1ZGWlFWV3hvVTJWV1pISlhhM1JYVm10V05sVldVbE5XVmxwR1kwZG9XbUpHVmpSV2JGcFRaRVV4Vms1V1RsTldWbGt4Vm10YVYyRXhXbkpOV0U1b1RUSjRWRlpyVm5kaFJsWnlWbXQwYVUxV1NqRlpNRlpyWVVVeFJWSnVhRmRTYkVwTVYxWmFTbVF3TVZWV2JGWlhZa1Z3VFZkV1pIcGxSVFZ6Vld4c1lWSlVWbTlaVkVvd1RsWlplRnBJWkZOaGVrWjVWR3hXYjFaSFNsaGhSMmhYWVRGYWVWcFZXbE5XTVhCR1RsVTFVMkpyU2xkV2JYaHZZakZTYzFOcldsZFdSVnBXVm10V2QxVkdiRmhqTTJoVFZteHdNRmt3VlRGV01ERldWMVJDVjFKdFRYaFVhMXBTWlVaT2MxcEhSbE5TTWswMVdtdGFWMU5YU2paVmJYaHBWbTVDUjFaWGVHOWhNVkY1VW01U2ExSkdjRlpaVkVaTFpWWndSVkZVUm1wV2JWSmFXV3RWTldKSFJYbGtla3BYVW0xb00xbHRNVTlXTVU1WllVWk9hR1ZyV2s1WFZ6QXhZakpPUjFwR2FHcFNlbFp6V1Zod1YyVkdWbGhOV0dSV1VteHNORmxZY0VkV1YwVjVWV3hPVldKR1ZqUlZiRnBQWkVkU1NGSnNaRTVTYkZreVZtcEtOR0V4VVhsU2JrNW9UVEo0VmxaclZURlZSbHB4VVd4YWJGWnNTbGhYYTFwM1lrZEdObEpVU2xwV1JUVjZWbFZhU21ReVJYcGlSbFpwVjBWS1JGWkdaSHBsUjA1WFYyNVNhbEp1UWxoVmFrRjNaVVpaZVdSSGRGcFdNRnBYVkd0b2MxWldXa1pPVjJoYVZqTlNTRlJzV210ak1YQkhWRzFvYVZORlNrZFdiWGh2WXpGc1YxZFlaRTlYUlRWb1dWUkdWbVZHVm5SbFJuQnNZbFpKTWxSVlVYaFBSVEZWVVZSS1VGWkZNSGRVTVZKQ1RXczFjVk5VVGs1aGF6RTJWREJPZDFOR1ZsWmtNMFp0VWtVd2VsZHNaRmRoUm10NVZsUkNZV0pWYTNsVVZXUlNUVVpzY1ZOdE1XRlNNV3cyVjFod2EyRkZNVlZVVkVKUVZqQlZkMWR0Y0d0aE1XdzJWRlJLVGxKRlZURlVibkJTVFd4d1NGWlljRnBpVlRCNVZHcEtUazFHY0hGVmJYaFBUV3RhY0Zkc1pGWk9SVGxZVTIxd1RsSkhaelJXUjNSWFYwZGFRbEJVTVRoTlZFRXlUMVJOTUU5VVFUSk9ha2t6VFdwTmVrOURjRWhWVlhkeFprUlZlVmxxVG0xT2VrWnNXa1JWZWxwdFZtaFBSRUpxVFdwbk5VNXRXbXRaVkVwcFRUSktiRTU2UlhwYVJGSm9UbFJWZUUxcVkzcE9ha0V4VFZSck1sbDZWbWxQVkZGM1RXMWFiVmt5V1ROYVZFMHhUakpPT0ZSclZsaG1RVDA5fFVIbzVSV1ZZVWpGaFJ6VjBXVzFvUkdONk1XWk9lbFptVFROM2VFMUVXVFZOZWxFMVRVUlpNazFxWTNsTmVrMDBTMnRrVWxSRGNEaE9SRVUxV1RKYWExbFViR3RQVkZGNFRXMUZOVmx0VVROYVYxSnRUMVJSTVU1NlRteE5WMFV4V21wS2EwNUhUbXRaVkd4cFRWUkJlVmw2U1RCYVJHUnNXVmRhYUZsdFRUUk5lbGw0VFZSU2ExbDZWVEpOV0hoUFVsWmtPQT09fE5vbmV8MTA2OTM0OTA2NjI3MjMzOCpHUUwqfDFmYjAyODI5MTE2MmE2ZDVjNjg2NDQ5YmUwODlhNTIwNzc3MzA3ZTQzNDgxMjZlZGNmZDk3NTYwNWYzMTU1NTV8TkVXfA=="
-                ],
+                "bookmarks": [bookmark],
             },
             "context": {},
         }
