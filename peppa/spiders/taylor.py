@@ -73,12 +73,15 @@ class TaylorSpider(scrapy.Spider):
                     continue
 
                 item = TaylorItem()
-                item["image_urls"] = [image["url"]]
-                item["width"] = image["width"]
-                item["height"] = image["height"]
-                item["board"] = entry["board"]["name"]
-                item["title"] = entry["title"]
-                item["description"] = entry["description"]
+                try:
+                    item["image_urls"] = [image["url"]]
+                    item["width"] = image["width"]
+                    item["height"] = image["height"]
+                    item["board"] = entry["board"]["name"]
+                    item["title"] = entry["title"]
+                    item["description"] = entry["description"]
+                except KeyError as e:
+                    continue
 
                 self.image_urls.add(image["url"])
 
